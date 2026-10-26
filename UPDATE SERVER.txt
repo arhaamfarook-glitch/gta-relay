@@ -1,0 +1,5 @@
+Upload these three Python files to the existing gta-relay GitHub repository, replacing the old files. Keep render.yaml. Render then needs to redeploy the latest commit.
+
+This adds the single public server endpoints, 4-player count, first-player spawn metadata, shared-world membership and relay coordinator handover. The game menu/client update is staged separately. Native gameplay handover when the first player leaves remains unverified; this is not a final multiplayer release.
+
+LAN and Online use the same local profile by player name. Money, weapons, vehicles, appearance and properties remain on the player computer and do not get uploaded to Render.

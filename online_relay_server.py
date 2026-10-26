@@ -14,6 +14,7 @@ from lan_session import LanRoom, LanClient, LanError, username
 class OnlineRelay:
     def __init__(self, max_rooms=16, lease=25):
         self.lock = threading.RLock()
+        self.public_code = None
         self.rooms = {}
         self.clients = {}
         self.creates = {}
@@ -27,6 +28,8 @@ class OnlineRelay:
             for token in stale:
                 self._leave(token)
             for code, room in list(self.rooms.items()):
+                if room.shared and not room.peers:
+                    room.close()
                 if room.closed.is_set():
                     del self.rooms[code]
             self.creates = {ip: times for ip, times in self.creates.items() if times and now - times[-1] < 60}
@@ -37,10 +40,26 @@ class OnlineRelay:
             row['client'].close()
             # Explicitly close the room before returning; guests cannot keep an
             # orphaned host session alive by continuing to poll it.
-            if row['client'].welcome['host']:
+            if row['client'].welcome['host'] and not row['room'].shared:
                 row['room'].close('The host disconnected from the online world.')
 
     def call(self, action, data, token='', address='127.0.0.1'):
+        if action=='public-status':
+            with self.lock:
+                room=self.rooms.get(self.public_code)
+                snapshot=room.snapshot() if room and not room.closed.is_set() else {}
+                return {'players':len(snapshot.get('players',[])),'max_players':4,'ready':snapshot.get('native_ready',False),'available':True}
+        if action=='public-join':
+            with self.lock:
+                self.expire()
+                room=self.rooms.get(self.public_code)
+                if room is None or room.closed.is_set():
+                    result=self.call('host',{**data,'shared':True},address=address)
+                    self.public_code=result['code']
+                else:
+                    result=self.call('join',{**data,'code':self.public_code},address=address)
+                result['public_world']=True
+                return result
         if action in ('host', 'join'):
             name = username(data.get('username'))
             with self.lock:
@@ -56,7 +75,7 @@ class OnlineRelay:
                     if len(self.rooms) >= self.max_rooms:
                         raise LanError('The online relay is full. Try again later.')
                     code = 'ONLINE-' + base64.b32encode(secrets.token_bytes(10)).decode()
-                    room = LanRoom('127.0.0.1')
+                    room = LanRoom('127.0.0.1', shared=data.get('shared') is True)
                 else:
                     code = data.get('code', '')
                     if not isinstance(code, str) or not re.fullmatch(r'ONLINE-[A-Z2-7]{16}', code):
@@ -97,6 +116,18 @@ class OnlineRelay:
             for body in decoded:
                 client.send(body)
             return {'sent': len(decoded)}
+        if action == 'claim-coordinator':
+            if not room.shared:raise LanError('This is not the shared Online server.')
+            with room.lock:
+                peer=room.peers.get(client.welcome['id'])
+                if peer is None:raise LanError('This player has left the server.')
+                if not peer.coordinator:
+                    for candidate in room.peers.values():candidate.coordinator=candidate is peer
+                    room.native_ready=False
+                    room.native_session_info=None
+                epoch=room.native_session_epoch+1
+            room.broadcast(b'J'+json.dumps(room.snapshot(),separators=(',',':')).encode())
+            return {'epoch':epoch}
         if action == 'receive':
             if not row['poll'].acquire(blocking=False):
                 raise LanError('Another receiver is reading this online world.')
@@ -107,6 +138,7 @@ class OnlineRelay:
             return {'packets': [base64.b64encode(p).decode() for p in packets],
                     'ended': client.closed or room.closed.is_set()}
         if action in ('end', 'begin-end'):
+            if room.shared:raise LanError('Leave Online to return to Story Mode. Other players stay connected.')
             if not client.welcome['host']:
                 raise LanError('Only the host can end this world.')
             epoch = room.begin_end()
@@ -136,7 +168,7 @@ def make_server(relay, address=('127.0.0.1', 8790)):
             self.connection.settimeout(15)
 
         def do_GET(self):
-            body = b'{"service":"gta-online-relay","protocol":1}'
+            body = b'{"service":"gta-online-relay","protocol":1,"shared_world":true}'
             self.send_response(200 if self.path == '/health' else 404)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(body)))
