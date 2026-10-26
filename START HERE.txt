@@ -1,0 +1,33 @@
+Free relay hosting on Render
+===========================
+
+Each world supports 4 players total, including its host.
+
+This small folder contains the relay only. Do not upload GTA-V.html, game data,
+save files, the rest of the workspace or passwords to the hosting provider.
+
+1. Create a GitHub account at https://github.com/signup if you do not have one.
+2. Create a new repository and upload the files in this folder to its root.
+   You can use GitHub's website; no Git installation is required.
+3. Create a Render account at https://dashboard.render.com/register.
+4. Choose New > Blueprint, connect GitHub, and select this repository.
+5. Review the service and confirm its compute plan is Free before deploying.
+6. When it is Live, send its https://...onrender.com address to this chat.
+   No passwords, API keys or billing information are needed in chat.
+
+The game update still needs that deployed address added and internet testing.
+Uploading these files does not configure the game automatically.
+
+Free-plan limits:
+- The service sleeps after 15 minutes with no incoming traffic and can take
+  about one minute to wake up. The game client needs to account for that delay.
+- Render can restart free services, which will disconnect an active room.
+- Monthly free instance hours, bandwidth and build limits apply.
+- Without a payment method, Render documents suspension when bandwidth is
+  exhausted instead of charging for more bandwidth. Review account billing
+  settings and avoid selecting paid services or upgrades.
+- Profile saves stay on each player's computer; the relay stores rooms in memory.
+
+Official instructions and current limits:
+https://render.com/docs/free
+https://render.com/docs/infrastructure-as-code

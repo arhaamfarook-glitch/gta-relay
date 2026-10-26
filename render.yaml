@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: gta-friends-relay
+    runtime: python
+    plan: free
+    buildCommand: python -m py_compile online_relay_server.py lan_session.py local_lan_session_info.py
+    startCommand: python online_relay_server.py --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
